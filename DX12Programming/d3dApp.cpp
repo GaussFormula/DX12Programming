@@ -2,6 +2,8 @@
 
 #include <windowsx.h>
 
+using Microsoft::WRL::ComPtr;
+
 LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Forward hwnd on because we can get messages before CreateWindow returns,
@@ -168,6 +170,18 @@ bool D3DApp::InitDirect3D()
         D3D_FEATURE_LEVEL_11_0,
         IID_PPV_ARGS(&md3dDevice)
     );
+
+    // Fallback to WARP device.
+    if (FAILED(hardwareResult))
+    {
+        ComPtr<IDXGIAdapter> pWarpAdapter;
+        ThrowIfFailed(mdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));
+        ThrowIfFailed(D3D12CreateDevice(
+            pWarpAdapter.Get(),
+            D3D_FEATURE_LEVEL_11_0,
+            IID_PPV_ARGS(&md3dDevice)
+        ));
+    }
 }
 
 LRESULT D3DApp::MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -246,7 +260,62 @@ LRESULT D3DApp::MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
         }
         return 0;
-    default:
-        break;
+
+    // WM_ENTERSIZEMOVE is sent when the user grabs resize bars.
+    case WM_ENTERSIZEMOVE:
+        mAppPaused = true;
+        mResizing = true;
+        mTimer.Stop();
+        return 0;
+
+    // WM_EXITSIZEMOVE is sent when the user releases the resize bar.
+    // Here we reset everything based on the new window dimensions.
+    case WM_EXITSIZEMOVE:
+        mAppPaused = false;
+        mResizing = false;
+        mTimer.Start();
+        OnResize();
+        return 0;
+
+    // WM_DESTROY is sent when the window is being destroyed.
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+
+    // The WM_MENUCHAR message is sent when a menu is active and the user presses
+    // a key that does not correspond to any mnemonic or accelerator key.
+    case WM_MENUCHAR:
+        // Don't beep when we alt-enter.
+        return MAKELRESULT(0, MNC_CLOSE);
+
+        // Catch this message so to prevent the window from becoming too small.
+    case WM_GETMINMAXINFO:
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+        ((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+        return 0;
+
+    case WM_LBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+        OnMouseDown(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+    case WM_LBUTTONUP:
+    case WM_MBUTTONUP:
+    case WM_RBUTTONUP:
+        OnMouseUp(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+    case WM_MOUSEMOVE:
+        OnMouseMove(wParam, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        return 0;
+    case WM_KEYUP:
+        if (wParam == VK_ESCAPE)
+        {
+            PostQuitMessage(0);
+        }
+        else if ((int)wParam == VK_F2)
+            Set4xMsaaState(!m4xMsaaState);
+
+        return 0;
     }
+    return DefWindowProc(hWnd, msg, wParam, lParam);
 }
