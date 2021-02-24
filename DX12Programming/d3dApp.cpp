@@ -182,6 +182,34 @@ bool D3DApp::InitDirect3D()
             IID_PPV_ARGS(&md3dDevice)
         ));
     }
+
+    mRtvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    mDsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    mCbvDescritporSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    // Check 4X MSAA quality support for our back buffer format.
+    // All Direct3D 11 capable devices support 4X MSAA for all render
+    // target formats, so we only need to check quality support.
+
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msQualityLevels;
+    msQualityLevels.Format = mBackBufferFormat;
+    msQualityLevels.SampleCount = 4;
+    msQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
+    msQualityLevels.NumQualityLevels = 0;
+    ThrowIfFailed(md3dDevice->CheckFeatureSupport(
+        D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+        &msQualityLevels,
+        sizeof(msQualityLevels)
+    ));
+
+    m4xMsaaQuality = msQualityLevels.NumQualityLevels;
+    assert(m4xMsaaQuality > 0 && "Unexcepted MSAA quality level");
+
+#ifdef _DEBUG
+    LogAdapters();
+#endif
+
+    CreateCommandObjects();
 }
 
 LRESULT D3DApp::MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -318,4 +346,58 @@ LRESULT D3DApp::MsgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
     return DefWindowProc(hWnd, msg, wParam, lParam);
+}
+
+void D3DApp::LogAdapterOutputs(IDXGIAdapter* adapter)
+{
+    UINT i = 0;
+    IDXGIOutput* output = nullptr;
+    while (adapter->EnumOutputs(i, &output) != DXGI_ERROR_NOT_FOUND)
+    {
+        DXGI_OUTPUT_DESC desc;
+        output->GetDesc(&desc);
+        std::wstring text = L"***Output: ";
+        text += desc.DeviceName;
+        text += L"\n";
+        OutputDebugString(text.c_str());
+
+        LogOutputDisplayModes(output, mBackBufferFormat);
+
+        ReleaseCom(output);
+        ++i;
+    }
+}
+
+void D3DApp::LogAdapters()
+{
+    UINT i = 0;
+    IDXGIAdapter* adapter = nullptr;
+    std::vector<IDXGIAdapter*> adapterList;
+    while (mdxgiFactory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND)
+    {
+        DXGI_ADAPTER_DESC desc;
+        adapter->GetDesc(&desc);
+
+        std::wstring text = L"***Adapter: ";
+        text += desc.Description;
+        text += L"\n";
+
+        OutputDebugString(text.c_str());
+        adapterList.push_back(adapter);
+        ++i;
+    }
+
+    for (size_t i = 0; i < adapterList.size(); ++i)
+    {
+        LogAdapterOutputs(adapterList[i]);
+        ReleaseCom(adapterList[i]);
+    }
+}
+
+void D3DApp::CreateCommandObjects()
+{
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    ThrowIfFailed(md3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
 }
