@@ -183,6 +183,8 @@ bool D3DApp::InitDirect3D()
         ));
     }
 
+    ThrowIfFailed(md3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
+
     mRtvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     mDsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
     mCbvDescritporSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -619,8 +621,8 @@ void D3DApp::CalculateFrameStats()
         float fps = (float)frameCnt; // fps = frameCnt / 1
         float mspf = 1000.0f / fps;
 
-        std::wstring fpsStr = to_wstring(fps);
-        std::wstring mspfStr = to_wstring(mspf);
+        std::wstring fpsStr = std::to_wstring(fps);
+        std::wstring mspfStr = std::to_wstring(mspf);
 
         std::wstring windowText = mMainWndCaption +
             L"    fps: " + fpsStr +
