@@ -18,6 +18,7 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <shellapi.h>
 
 #include "d3dx12.h"
 #include "DDSTextureLoader.h"

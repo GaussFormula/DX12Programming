@@ -43,6 +43,7 @@ float MathHelper::AngleFromXY(float x, float y)
     {
         theta = atan2f(y, x) + Pi;
     }
+    return theta;
 }
 
 DirectX::XMVECTOR MathHelper::RandUnitVec3()
